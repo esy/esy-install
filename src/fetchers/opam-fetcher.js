@@ -7,10 +7,7 @@ import path from 'path';
 import http from 'http';
 import {SecurityError} from '../errors.js';
 import type {OpamManifest} from '../resolvers/exotics/opam-resolver';
-import {
-  parseOpamResolution,
-  lookupOpamPackageManifest,
-} from '../resolvers/exotics/opam-resolver';
+import {parseResolution, resolveManifest} from '../resolvers/exotics/opam-resolver';
 import BaseFetcher from '../fetchers/base-fetcher.js';
 import * as constants from '../constants.js';
 import * as fs from '../util/fs.js';
@@ -22,8 +19,8 @@ import DecompressZip from 'decompress-zip';
 export default class OpamFetcher extends BaseFetcher {
   async _fetch(): Promise<FetchedOverride> {
     const {dest} = this;
-    const resolution = parseOpamResolution(this.reference);
-    const manifest = await lookupOpamPackageManifest(
+    const resolution = parseResolution(this.reference);
+    const manifest = await resolveManifest(
       resolution.name,
       resolution.version,
       this.config,
@@ -41,14 +38,7 @@ export default class OpamFetcher extends BaseFetcher {
     await writeJson(path.join(dest, 'package.json'), manifest);
 
     // put extra files
-    const {files} = manifest.opam;
-    if (files) {
-      await Promise.all(
-        files.map(file =>
-          fs.writeFile(path.join(dest, file.name), file.content, {encoding: 'utf8'}),
-        ),
-      );
-    }
+    await writeFiles(dest, manifest.opam.files);
 
     // apply patch
     const {patch} = manifest.opam;
@@ -183,4 +173,16 @@ function getTarballFormatFromFilename(filename): 'gzip' | 'bzip' | 'zip' | 'xz' 
     // XXX: default to gzip? Is this safe?
     return 'gzip';
   }
+}
+
+async function writeFiles(dest, files) {
+  if (files.length === 0) {
+    return;
+  }
+  const writes = files.map(async file => {
+    const filename = path.join(dest, file.name);
+    await fs.mkdirp(path.dirname(filename));
+    await fs.writeFile(path.join(dest, file.name), file.content, {encoding: 'utf8'});
+  });
+  await Promise.all(writes);
 }

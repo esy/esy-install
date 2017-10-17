@@ -20,7 +20,7 @@ import ExoticLink from './exotics/link-resolver.js';
 import ExoticGitLab from './exotics/gitlab-resolver.js';
 import ExoticGist from './exotics/gist-resolver.js';
 import ExoticBitbucket from './exotics/bitbucket-resolver.js';
-import ExoticOpam from './exotics/opam-resolver.js';
+import ExoticOpam from './exotics/opam-resolver';
 
 const exotics: Set<Class<$Subtype<BaseResolver>>> = new Set([
   ExoticGit,
