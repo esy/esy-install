@@ -28,6 +28,11 @@ type File = {
   content: string
 };
 
+type Patch = {
+  name: string,
+  content: string
+};
+
 export type OpamManifest = Manifest & {
   esy: {
     build: string | Array<string> | Array<Array<string>>,
@@ -35,9 +40,9 @@ export type OpamManifest = Manifest & {
   },
   opam: {
     url: string,
-    files: Array<File>,
     checksum?: string,
-    patch?: string
+    files: Array<File>,
+    patches: Array<Patch>
   }
 };
 
@@ -186,6 +191,7 @@ function normalizeManifest(manifest) {
   manifest.esy.exportedEnv = manifest.esy.exportedEnv || {};
   manifest.opam = manifest.opam || {};
   manifest.opam.files = manifest.opam.files || [];
+  manifest.opam.patches = manifest.opam.patches || [];
 }
 
 function chooseVersion(name, versions, constraint) {

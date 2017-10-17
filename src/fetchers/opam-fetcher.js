@@ -40,19 +40,8 @@ export default class OpamFetcher extends BaseFetcher {
     // opam tarballs don't have package.json (obviously) so we put it there
     await writeJson(path.join(dest, "package.json"), manifest);
 
-    // put extra files
     await writeFiles(dest, manifest.opam.files);
-
-    // apply patch
-    const { patch } = manifest.opam;
-    if (patch) {
-      const patchFilename = path.join(dest, "_esy_patch");
-      await fs.writeFile(patchFilename, patch, { encoding: "utf8" });
-      await child.exec("patch -p1 < _esy_patch", {
-        cwd: dest,
-        shell: "/bin/bash"
-      });
-    }
+    await applyPatches(dest, manifest.opam.patches);
 
     // TODO: what should we done here?
     const fetchOverride = { hash, resolved: null };
@@ -208,4 +197,16 @@ async function writeFiles(dest, files) {
     });
   });
   await Promise.all(writes);
+}
+
+async function applyPatches(dest, patches) {
+  for (const patch of patches) {
+    const patchFilename = path.join(dest, patch.name);
+    await fs.writeFile(patchFilename, patch.content, { encoding: "utf8" });
+    await child.exec("patch -p1 < _esy_patch", {
+      cwd: dest,
+      shell: "/bin/bash"
+    });
+    await fs.unlink(patchFilename);
+  }
 }

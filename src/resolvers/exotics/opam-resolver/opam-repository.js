@@ -3,8 +3,8 @@
 const path = require("path");
 const EsyOpam = require("@esy-ocaml/esy-opam");
 
-import * as fs from "../../../util/fs.js";
 import type Config from "../../../config";
+import * as fs from "../../../util/fs.js";
 import { cloneOrUpdateRepository } from "./util.js";
 import { OPAM_REPOSITORY, OPAM_SCOPE } from "./config.js";
 
@@ -50,13 +50,13 @@ async function convertOpamToManifest(name, spec, packageDir) {
   const version = versionParts.join(".");
   const opamFilename = path.join(packageDir, spec, "opam");
   const opamFile = EsyOpam.parseOpam(await fs.readFile(opamFilename));
-  const pkg = EsyOpam.renderOpam(name, version, opamFile);
+  const manifest = EsyOpam.renderOpam(name, version, opamFile);
 
   const urlFilename = path.join(packageDir, spec, "url");
   if (!await fs.exists(urlFilename)) {
     // $FlowFixMe: ...
-    pkg.opam = { url: null, checksum: null, files: [] };
-    return pkg;
+    manifest.opam = { url: null, checksum: null, files: [] };
+    return manifest;
   }
 
   const urlData = await fs.readFile(urlFilename);
@@ -66,24 +66,37 @@ async function convertOpamToManifest(name, spec, packageDir) {
     let checksum = url.checksum.filter(h => h.kind === "md5")[0];
     checksum = checksum ? checksum.contents : null;
     // $FlowFixMe: ...
-    pkg.opam = { url: url.url, checksum, files: [] };
+    manifest.opam = { url: url.url, checksum, files: [] };
   } else {
     // $FlowFixMe: ...
-    pkg.opam = { url: null, checksum: null, files: [] };
+    manifest.opam = { url: null, checksum: null, files: [] };
   }
-  return pkg;
+
+  const patchFilenames: Array<string> = (manifest: any)._esy_opam_patches;
+  if (patchFilenames) {
+    // $FlowFixMe: ...
+    manifest.opam.patches = await Promise.all(
+      patchFilenames.map(async basename => {
+        const filename = path.join(packageDir, spec, "files", basename);
+        const content = await fs.readFile(filename);
+        return { name: basename, content };
+      })
+    );
+  }
+
+  return manifest;
 }
 
 async function convertOpamToManifestCollection(name, packageDir) {
   const versionDirList = await fs.readdir(packageDir);
-  const packageList = await Promise.all(
+  const manifestList = await Promise.all(
     versionDirList.map(versionDir =>
       convertOpamToManifest(name, versionDir, packageDir)
     )
   );
   const manifestCollection = { name, versions: {} };
-  for (const pkg of packageList) {
-    manifestCollection.versions[pkg.version] = pkg;
+  for (const manifest of manifestList) {
+    manifestCollection.versions[manifest.version] = manifest;
   }
   return manifestCollection;
 }
