@@ -25,6 +25,7 @@ export type OpamRepositoryOverride = {
 
 export type OpamPackageOverride = {
   build?: Array<Array<string>>,
+  dependencies?: { [name: string]: string },
   exportedEnv: {
     [name: string]: { val: string, scope?: "global" }
   },
@@ -77,6 +78,10 @@ export function applyOverride(
       manifest.opam = {
         ...opam,
         files: opam.files.concat(override.opam.files)
+      };
+      manifest.dependencies = {
+        ...manifest.dependencies,
+        ...override.dependencies
       };
 
       hasher.update(JSON.stringify(override));
@@ -172,5 +177,6 @@ function stripPrelease(version) {
   const v = semver.parse(version);
   invariant(v != null, `Invalid version: ${version}`);
   v.prerelease = [];
+  // $FlowFixMe: update semver typings
   return v.format();
 }
