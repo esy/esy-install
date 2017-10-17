@@ -1,38 +1,39 @@
 /* @flow */
 
-const path = require('path');
-const semver = require('semver');
-const EsyOpam = require('@esy-ocaml/esy-opam');
-const crypto = require('crypto');
-const yaml = require('js-yaml');
+const path = require("path");
+const invariant = require("invariant");
+const semver = require("semver");
+const EsyOpam = require("@esy-ocaml/esy-opam");
+const crypto = require("crypto");
+const yaml = require("js-yaml");
 
-import type {OpamManifest} from './index.js';
-import type Config from '../../../config';
-import * as fs from '../../../util/fs.js';
-import * as child from '../../../util/child.js';
-import {cloneOrUpdateRepository} from './util.js';
+import type { OpamManifest } from "./index.js";
+import type Config from "../../../config";
+import * as fs from "../../../util/fs.js";
+import * as child from "../../../util/child.js";
+import { cloneOrUpdateRepository } from "./util.js";
 import {
   OPAM_REPOSITORY_OVERRIDE,
   OPAM_REPOSITORY_OVERRIDE_CHECKOUT,
-  OPAM_SCOPE,
-} from './config.js';
+  OPAM_SCOPE
+} from "./config.js";
 
 export type OpamRepositoryOverride = {
   checkoutPath: string,
-  overrides: Map<string, Map<string, OpamPackageOverride>>,
+  overrides: Map<string, Map<string, OpamPackageOverride>>
 };
 
 export type OpamPackageOverride = {
   build?: Array<Array<string>>,
   exportedEnv: {
-    [name: string]: {val: string, scope?: 'global'},
+    [name: string]: { val: string, scope?: "global" }
   },
   opam: {
-    files: Array<{name: string, content: string}>,
-  },
+    files: Array<{ name: string, content: string }>
+  }
 };
 
-const MATCH_ALL_VERSIONS = 'x.x.x';
+const MATCH_ALL_VERSIONS = "x.x.x";
 
 let _initializing: ?Promise<OpamRepositoryOverride> = null;
 
@@ -46,40 +47,43 @@ export function init(config: Config): Promise<OpamRepositoryOverride> {
   return _initializing;
 }
 
-export function applyOverride(overrides: OpamRepositoryOverride, manifest: OpamManifest) {
+export function applyOverride(
+  overrides: OpamRepositoryOverride,
+  manifest: OpamManifest
+) {
   const packageOverrides = overrides.overrides.get(
-    manifest.name.slice(`@${OPAM_SCOPE}/`.length),
+    manifest.name.slice(`@${OPAM_SCOPE}/`.length)
   );
 
   if (packageOverrides == null) {
     return manifest;
   }
 
-  const hasher = crypto.createHash('sha512');
+  const hasher = crypto.createHash("sha512");
   hasher.update(manifest._uid);
 
   for (const [versionRange, override] of packageOverrides.entries()) {
-    if (semver.satisfies(manifest.version, versionRange)) {
-      const {esy, opam} = manifest;
+    if (semver.satisfies(stripPrelease(manifest.version), versionRange)) {
+      const { esy, opam } = manifest;
 
       manifest.esy = {
         ...esy,
         build: override.build || esy.build,
         exportedEnv: {
           ...esy.exportedEnv,
-          ...override.exportedEnv,
-        },
+          ...override.exportedEnv
+        }
       };
       manifest.opam = {
         ...opam,
-        files: opam.files.concat(override.opam.files),
+        files: opam.files.concat(override.opam.files)
       };
 
       hasher.update(JSON.stringify(override));
     }
   }
 
-  manifest._uid = hasher.digest('hex');
+  manifest._uid = hasher.digest("hex");
 
   return manifest;
 }
@@ -87,7 +91,7 @@ export function applyOverride(overrides: OpamRepositoryOverride, manifest: OpamM
 async function initImpl(config) {
   const checkoutPath = await cloneOverridesRepo(config);
 
-  const overridesPath = path.join(checkoutPath, 'packages');
+  const overridesPath = path.join(checkoutPath, "packages");
   const overridesPathSet = await fs.readdir(overridesPath);
 
   const overrides = new Map();
@@ -98,32 +102,32 @@ async function initImpl(config) {
       if (override == null) {
         return;
       }
-      const {packageName, versionRange} = parseOverrideSpec(spec);
+      const { packageName, versionRange } = parseOverrideSpec(spec);
       const packageOverrides = mapSetDefault(overrides, packageName, mkMap);
       packageOverrides.set(versionRange, override);
-    }),
+    })
   );
 
-  return {checkoutPath, overrides};
+  return { checkoutPath, overrides };
 }
 
 function parseOverrideSpec(spec: string) {
-  const idx = spec.indexOf('.');
+  const idx = spec.indexOf(".");
   if (idx === -1) {
-    return {packageName: spec, versionRange: MATCH_ALL_VERSIONS};
+    return { packageName: spec, versionRange: MATCH_ALL_VERSIONS };
   } else {
     const packageName = spec.substring(0, idx);
-    const versionRange = spec.substring(idx + 1).replace(/_/g, ' ');
-    return {packageName, versionRange};
+    const versionRange = spec.substring(idx + 1).replace(/_/g, " ");
+    return { packageName, versionRange };
   }
 }
 
 async function readOverride(root: string): ?Promise<?OpamPackageOverride> {
-  const yamlPath = path.join(root, 'package.yaml');
-  const jsonPath = path.join(root, 'package.json');
+  const yamlPath = path.join(root, "package.yaml");
+  const jsonPath = path.join(root, "package.json");
   if (await fs.exists(yamlPath)) {
     const data = await fs.readFile(yamlPath);
-    const override = yaml.safeLoad(data, {filename: yamlPath});
+    const override = yaml.safeLoad(data, { filename: yamlPath });
     normalizeOverride(override);
     return override;
   } else if (await fs.exists(jsonPath)) {
@@ -159,7 +163,14 @@ async function cloneOverridesRepo(config) {
   if (OPAM_REPOSITORY_OVERRIDE_CHECKOUT != null) {
     return OPAM_REPOSITORY_OVERRIDE_CHECKOUT;
   }
-  const checkoutPath = path.join(config.cacheFolder, 'esy-opam-override');
+  const checkoutPath = path.join(config.cacheFolder, "esy-opam-override");
   await cloneOrUpdateRepository(OPAM_REPOSITORY_OVERRIDE, checkoutPath);
   return checkoutPath;
+}
+
+function stripPrelease(version) {
+  const v = semver.parse(version);
+  invariant(v != null, `Invalid version: ${version}`);
+  v.prerelease = [];
+  return v.format();
 }
