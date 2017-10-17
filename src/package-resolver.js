@@ -40,6 +40,9 @@ export default class PackageResolver {
     this.delayedResolveQueue = [];
   }
 
+  // version of ocaml to be used for dependency resolution
+  ocamlVersion: ?string;
+
   // whether the dependency graph will be flattened
   flat: boolean;
 
@@ -534,6 +537,20 @@ export default class PackageResolver {
     const activity = (this.activity = this.reporter.activity());
 
     for (const req of deps) {
+      if (isDependencyOnOCaml(req)) {
+        await this.find(req)
+        const manifest = this.getResolvedPattern(req.pattern);
+        invariant(manifest != null, 'Unable to resolve dependency on OCaml compiler');
+        this.ocamlVersion = manifest.version;
+        break;
+      }
+    }
+
+    for (const req of deps) {
+      // This dependency was already processed above
+      if (isDependencyOnOCaml(req)) {
+        continue;
+      }
       await this.find(req);
     }
 
@@ -632,4 +649,8 @@ export default class PackageResolver {
 
     return req;
   }
+}
+
+function isDependencyOnOCaml(dep: DependencyRequestPattern) {
+  return dep.pattern.startsWith('ocaml@');
 }
