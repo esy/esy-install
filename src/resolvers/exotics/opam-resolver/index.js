@@ -3,7 +3,9 @@
 const path = require("path");
 const semver = require("semver");
 const EsyOpam = require("@esy-ocaml/esy-opam");
+const invariant = require("invariant");
 
+import { MessageError } from "../../../errors.js";
 import type { Manifest } from "../../../types.js";
 import type Config from "../../../config";
 import type PackageRequest from "../../../package-request.js";
@@ -76,12 +78,7 @@ export default class OpamResolver extends ExoticResolver {
       return shrunk;
     }
 
-    let manifest = await resolveManifest(
-      this.name,
-      this.version,
-      this.config,
-      this.resolver.ocamlVersion
-    );
+    let manifest = await this.resolveManifest();
     const reference = `${manifest.name}@${manifest.version}`;
 
     manifest._remote = {
@@ -92,6 +89,63 @@ export default class OpamResolver extends ExoticResolver {
       resolved: reference
     };
 
+    return manifest;
+  }
+
+  async resolveManifest(): Promise<OpamManifest> {
+    const versionRange: string =
+      this.version == null || this.version === "latest" ? "*" : this.version;
+
+    const overrides = await OpamRepositoryOverride.init(this.config);
+    const repository = await OpamRepository.init(this.config);
+
+    const manifestCollection = await OpamRepository.getManifestCollection(
+      repository,
+      this.name
+    );
+
+    let versions = Object.keys(manifestCollection.versions);
+
+    // check if we need to restrict the available versions based on the ocaml
+    // compiler being used
+    if (this.resolver.ocamlVersion != null) {
+      const deps = [];
+      const versionsAvailableForOCamlVersion = [];
+      for (const version of versions) {
+        const manifest = manifestCollection.versions[version];
+        // note that we get ocaml compiler version from "peerDependencies" as
+        // dependency on ocaml compiler in "dependencies" might be just
+        // build-time dependency (this is before we have "buildTimeDependencies"
+        // support and we rely on esy-opam putting "ocaml" into
+        // "peerDependencies")
+        const peerDependencies = manifest.peerDependencies || {};
+        const ocamlDependency = peerDependencies.ocaml || "*";
+        deps.push(`${this.name}@${version} requires ${ocamlDependency}`);
+        if (semver.satisfies(this.resolver.ocamlVersion, ocamlDependency)) {
+          versionsAvailableForOCamlVersion.push(version);
+        }
+      }
+      if (versionsAvailableForOCamlVersion.length === 0) {
+        console.log(deps);
+        throw new MessageError(
+          `No compatible version found: ${this
+            .name}@${versionRange} for OCaml ${this.resolver.ocamlVersion}`
+        );
+      }
+      versions = versionsAvailableForOCamlVersion;
+    }
+
+    const version = chooseVersion(this.name, versions, versionRange);
+
+    if (version == null) {
+      // TODO: figure out how to report error
+      throw new MessageError(dependencyNotFoundErrorMessage(this.request));
+    }
+
+    let manifest = manifestCollection.versions[version];
+    normalizeManifest(manifest);
+    manifest._uid = manifest.opam.checksum || manifest.version;
+    manifest = OpamRepositoryOverride.applyOverride(overrides, manifest);
     return manifest;
   }
 }
@@ -107,101 +161,19 @@ export function parseResolution(
   };
 }
 
-async function convertOpamToManifest(name, spec, packageDir) {
-  const [_, ...versionParts] = spec.split(".");
-  const version = versionParts.join(".");
-  const opamFilename = path.join(packageDir, spec, "opam");
-  const opamFile = EsyOpam.parseOpam(await fs.readFile(opamFilename));
-  const pkg = EsyOpam.renderOpam(name, version, opamFile);
-
-  const urlFilename = path.join(packageDir, spec, "url");
-  if (!await fs.exists(urlFilename)) {
-    // $FlowFixMe: ...
-    pkg.opam = { url: null, checksum: null, files: [] };
-    return pkg;
-  }
-
-  const urlData = await fs.readFile(urlFilename);
-  if (urlData != null) {
-    const opamUrl = EsyOpam.parseOpamUrl(urlData);
-    const url = EsyOpam.renderOpamUrl(opamUrl);
-    let checksum = url.checksum.filter(h => h.kind === "md5")[0];
-    checksum = checksum ? checksum.contents : null;
-    // $FlowFixMe: ...
-    pkg.opam = { url: url.url, checksum, files: [] };
-  } else {
-    // $FlowFixMe: ...
-    pkg.opam = { url: null, checksum: null, files: [] };
-  }
-  return pkg;
-}
-
-async function convertOpamToManifestCollection(name, packageDir) {
-  const versionDirList = await fs.readdir(packageDir);
-  const packageList = await Promise.all(
-    versionDirList.map(versionDir =>
-      convertOpamToManifest(name, versionDir, packageDir)
-    )
-  );
-  const manifestCollection = { name, versions: {} };
-  for (const pkg of packageList) {
-    manifestCollection.versions[pkg.version] = pkg;
-  }
-  return manifestCollection;
-}
-
-export async function resolveManifest(
+export async function lookupManifest(
   name: string,
-  versionRange: string,
-  config: Config,
-  ocamlVersion: ?string
+  version: string,
+  config: Config
 ): Promise<OpamManifest> {
-  if (versionRange == null || versionRange === "latest") {
-    versionRange = "*";
-  }
-
   const overrides = await OpamRepositoryOverride.init(config);
   const repository = await OpamRepository.init(config);
-  const packageDir = path.join(repository, "packages", name);
-
-  if (!await fs.exists(packageDir)) {
-    throw new Error(`No package found: @${OPAM_SCOPE}/${name}`);
-  }
-
-  const manifestCollection = await convertOpamToManifestCollection(
-    name,
-    packageDir
+  const manifestCollection = await OpamRepository.getManifestCollection(
+    repository,
+    name
   );
 
   let versions = Object.keys(manifestCollection.versions);
-
-  // check if we need to restrict the available versions based on the ocaml
-  // compiler being used
-  if (ocamlVersion != null) {
-    const versionsAvailableForOCamlVersion = [];
-    for (const version of versions) {
-      const manifest = manifestCollection.versions[version];
-      // note that we get ocaml compiler version from "peerDependencies" as
-      // dependency on ocaml compiler in "dependencies" might be just
-      // build-time dependency (this is before we have "buildTimeDependencies"
-      // support and we rely on esy-opam putting "ocaml" into
-      // "peerDependencies")
-      const peerDependencies = manifest.peerDependencies || {};
-      const ocamlDependency = peerDependencies.ocaml || "*";
-      if (await config.resolveConstraints([ocamlVersion], ocamlDependency)) {
-        versionsAvailableForOCamlVersion.push(version);
-      }
-    }
-    versions = versionsAvailableForOCamlVersion;
-  }
-
-  const version = await config.resolveConstraints(versions, versionRange);
-
-  if (version == null) {
-    // TODO: figure out how to report error
-    throw new Error(`No compatible version found: ${name}@${versionRange}`);
-  }
-
   let manifest = manifestCollection.versions[version];
   normalizeManifest(manifest);
   manifest._uid = manifest.opam.checksum || manifest.version;
@@ -214,4 +186,38 @@ function normalizeManifest(manifest) {
   manifest.esy.exportedEnv = manifest.esy.exportedEnv || {};
   manifest.opam = manifest.opam || {};
   manifest.opam.files = manifest.opam.files || [];
+}
+
+function chooseVersion(name, versions, constraint) {
+  const versionsParsed = versions.map(version => {
+    const v = semver.parse(version);
+    invariant(v != null, `Invalid version: @${OPAM_SCOPE}/${name}@${version}`);
+    // This is needed so `semver.satisfies()` will accept this for `*`
+    // constraint.
+    (v: any)._prereleaseHidden = v.prerelease;
+    v.prerelease = [];
+    return v;
+  });
+
+  (versionsParsed: any).sort((a, b) => {
+    return -1 * EsyOpam.versionCompare(a.raw, b.raw);
+  });
+
+  for (let i = 0; i < versionsParsed.length; i++) {
+    const v = versionsParsed[i];
+    if (semver.satisfies((v: any), constraint)) {
+      return v.raw;
+    }
+  }
+
+  return null;
+}
+
+function dependencyNotFoundErrorMessage(req: PackageRequest) {
+  let msg = `No compatible version found: "${req.pattern}"`;
+  const parentNames = req.parentNames.slice(0).reverse();
+  if (parentNames.length > 0) {
+    msg = msg + ` (dependency path: ${parentNames.join(" -> ")})`;
+  }
+  return msg;
 }
