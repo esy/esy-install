@@ -509,7 +509,18 @@ export default class PackageResolver {
     if (lockfileEntry) {
       const {range, hasVersion} = normalizePattern(req.pattern);
 
-      if (this.isLockfileEntryOutdated(lockfileEntry.version, range, hasVersion)) {
+      const Resolver = getExoticResolver(req.pattern);
+      const exoticIsLockfileEntryOutdated = (
+        Resolver != null &&
+        typeof Resolver.isLockfileEntryOutdated === 'function'
+      ) ? Resolver.isLockfileEntryOutdated : null;
+
+      if (
+        exoticIsLockfileEntryOutdated &&
+        exoticIsLockfileEntryOutdated(lockfileEntry.version, range, hasVersion) ||
+        !exoticIsLockfileEntryOutdated &&
+        this.isLockfileEntryOutdated(lockfileEntry.version, range, hasVersion)
+      ) {
         this.reporter.warn(this.reporter.lang('incorrectLockfileEntry', req.pattern));
         this.removePattern(req.pattern);
         this.lockfile.removePattern(req.pattern);

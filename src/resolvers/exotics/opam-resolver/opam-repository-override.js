@@ -11,7 +11,7 @@ import type { OpamManifest } from "./index.js";
 import type Config from "../../../config";
 import * as fs from "../../../util/fs.js";
 import * as child from "../../../util/child.js";
-import { cloneOrUpdateRepository } from "./util.js";
+import { cloneOrUpdateRepository, stripVersionPrelease } from "./util.js";
 import {
   OPAM_REPOSITORY_OVERRIDE,
   OPAM_REPOSITORY_OVERRIDE_CHECKOUT,
@@ -64,7 +64,9 @@ export function applyOverride(
   hasher.update(manifest._uid);
 
   for (const [versionRange, override] of packageOverrides.entries()) {
-    if (semver.satisfies(stripPrelease(manifest.version), versionRange)) {
+    if (
+      semver.satisfies(stripVersionPrelease(manifest.version), versionRange)
+    ) {
       const { esy, opam } = manifest;
 
       manifest.esy = {
@@ -171,12 +173,4 @@ async function cloneOverridesRepo(config) {
   const checkoutPath = path.join(config.cacheFolder, "esy-opam-override");
   await cloneOrUpdateRepository(OPAM_REPOSITORY_OVERRIDE, checkoutPath);
   return checkoutPath;
-}
-
-function stripPrelease(version) {
-  const v = semver.parse(version);
-  invariant(v != null, `Invalid version: ${version}`);
-  v.prerelease = [];
-  // $FlowFixMe: update semver typings
-  return v.format();
 }

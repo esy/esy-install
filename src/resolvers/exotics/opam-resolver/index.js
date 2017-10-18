@@ -14,7 +14,7 @@ import * as fs from "../../../util/fs.js";
 import * as child from "../../../util/child.js";
 import * as OpamRepositoryOverride from "./opam-repository-override.js";
 import * as OpamRepository from "./opam-repository.js";
-import { cloneOrUpdateRepository } from "./util.js";
+import { cloneOrUpdateRepository, stripVersionPrelease } from "./util.js";
 import { OPAM_SCOPE } from "./config.js";
 
 export type OpamManifestCollection = {
@@ -71,6 +71,23 @@ export default class OpamResolver extends ExoticResolver {
     pattern = pattern[0] === "@" ? pattern.slice(1) : pattern;
     const [_name, constraint] = pattern.split("@");
     return !!semver.validRange(constraint);
+  }
+
+  /**
+   * Determine if LockfileEntry is incorrect, remove it from lockfile cache and consider the pattern as new
+   */
+  static isLockfileEntryOutdated(
+    version: string,
+    range: string,
+    hasVersion: boolean
+  ): boolean {
+    version = stripVersionPrelease(version);
+    return !!(
+      semver.validRange(range) &&
+      semver.valid(version) &&
+      hasVersion &&
+      !semver.satisfies(version, range)
+    );
   }
 
   static getPatternVersion(pattern: string, pkg: Manifest): string {
