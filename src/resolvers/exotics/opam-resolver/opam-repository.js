@@ -41,7 +41,20 @@ export async function getManifestCollection(
 
 async function initImpl(config) {
   const checkoutPath = path.join(config.cacheFolder, "opam-repository");
-  await cloneOrUpdateRepository(OPAM_REPOSITORY, checkoutPath);
+  const onClone = () => {
+    config.reporter.info(
+      "Cloning ocaml/opam-repository (this might take a while)..."
+    );
+  };
+  const onUpdate = () => {
+    config.reporter.info(
+      "Updating ocaml/opam-repository checkout (this might take a while)..."
+    );
+  };
+  await cloneOrUpdateRepository(OPAM_REPOSITORY, checkoutPath, {
+    onClone,
+    onUpdate
+  });
   return checkoutPath;
 }
 

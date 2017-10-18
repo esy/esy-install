@@ -171,6 +171,19 @@ async function cloneOverridesRepo(config) {
     return OPAM_REPOSITORY_OVERRIDE_CHECKOUT;
   }
   const checkoutPath = path.join(config.cacheFolder, "esy-opam-override");
-  await cloneOrUpdateRepository(OPAM_REPOSITORY_OVERRIDE, checkoutPath);
+  const onClone = () => {
+    config.reporter.info(
+      "Cloning esy-ocaml/esy-opam-override (this might take a while)..."
+    );
+  };
+  const onUpdate = () => {
+    config.reporter.info(
+      "Updating esy-ocaml/esy-opam-override checkout (this might take a while)..."
+    );
+  };
+  await cloneOrUpdateRepository(OPAM_REPOSITORY_OVERRIDE, checkoutPath, {
+    onClone,
+    onUpdate
+  });
   return checkoutPath;
 }
