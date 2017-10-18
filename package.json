@@ -1,7 +1,7 @@
 {
   "name": "esy-install",
   "installationMethod": "unknown",
-  "version": "1.2.1",
+  "version": "1.2.1000",
   "license": "BSD-2-Clause",
   "preferGlobal": false,
   "description": "📦🐈 Fast, reliable, and secure dependency management.",
