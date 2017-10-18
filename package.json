@@ -103,7 +103,7 @@
   },
   "repository": "esy-ocaml/esy-install",
   "bin": {
-    "esy-install": "./bin/yarn"
+    "esy-install": "./bin/esy-install"
   },
   "scripts": {
     "build": "gulp build",
