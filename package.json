@@ -6,7 +6,7 @@
   "preferGlobal": false,
   "description": "📦🐈 Fast, reliable, and secure dependency management.",
   "dependencies": {
-    "@esy-ocaml/esy-opam": "0.0.3",
+    "@esy-ocaml/esy-opam": "0.0.4",
     "babel-eslint": "^7.2.3",
     "babel-runtime": "^6.0.0",
     "bytes": "^2.4.0",
