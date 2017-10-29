@@ -581,16 +581,25 @@ export default class Config {
    */
 
   async tryManifest(dir: string, registry: RegistryNames, isRoot: boolean): Promise<?Manifest> {
-    const {filename} = registries[registry];
-    const loc = path.join(dir, filename);
-    if (await fs.exists(loc)) {
-      const data = await this.readJson(loc);
-      data._registry = registry;
-      data._loc = loc;
-      return normalizeManifest(data, dir, this, isRoot);
-    } else {
-      return null;
+    const {filenameList} = registries[registry];
+    const tryFilename = async (filename) => {
+      const loc = path.join(dir, filename);
+      if (await fs.exists(loc)) {
+        const data = await this.readJson(loc);
+        data._registry = registry;
+        data._loc = loc;
+        return normalizeManifest(data, dir, this, isRoot);
+      } else {
+        return null;
+      }
     }
+    for (const filename of filenameList) {
+      const res = await tryFilename(filename);
+      if (res != null) {
+        return res;
+      }
+    }
+    return null;
   }
 
   async findManifest(dir: string, isRoot: boolean): Promise<?Manifest> {
@@ -638,7 +647,7 @@ export default class Config {
     }
 
     const registryFilenames = registryNames
-      .map(registryName => this.registries[registryName].constructor.filename)
+      .map(registryName => this.registries[registryName].constructor.filenameList.join('|'))
       .join('|');
     const trailingPattern = `/+(${registryFilenames})`;
     const ignorePatterns = this.registryFolders.map(folder => `/${folder}/*/+(${registryFilenames})`);
@@ -701,17 +710,23 @@ export default class Config {
     const manifests: RootManifests = {};
     for (const registryName of registryNames) {
       const registry = registries[registryName];
-      const jsonLoc = path.join(this.cwd, registry.filename);
 
       let object = {};
       let exists = false;
       let indent;
-      if (await fs.exists(jsonLoc)) {
-        exists = true;
 
-        const info = await this.readJson(jsonLoc, fs.readJsonAndFile);
-        object = info.object;
-        indent = detectIndent(info.content).indent || undefined;
+      for (const filename of registry.filenameList) {
+        const jsonLoc = path.join(this.cwd, filename);
+
+        if (await fs.exists(jsonLoc)) {
+          exists = true;
+
+          const info = await this.readJson(jsonLoc, fs.readJsonAndFile);
+          object = info.object;
+          indent = detectIndent(info.content).indent || undefined;
+          break;
+        }
+
       }
       manifests[registryName] = {loc: jsonLoc, object, exists, indent};
     }

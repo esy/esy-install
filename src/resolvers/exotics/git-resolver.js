@@ -104,23 +104,34 @@ export default class GitResolver extends ExoticResolver {
     const commit = await client.init();
 
     async function tryRegistry(registry): Promise<?Manifest> {
-      const {filename} = registries[registry];
+      const {filenameList} = registries[registry];
 
-      const file = await client.getFile(filename);
-      if (!file) {
-        return null;
+      const tryFilename = async filename => {
+        const file = await client.getFile(filename);
+        if (!file) {
+          return null;
+        }
+
+        const json = await config.readJson(`${url}/${filename}`, () => JSON.parse(file));
+        json._uid = commit;
+        json._remote = {
+          resolved: `${url}#${commit}`,
+          type: 'git',
+          reference: url,
+          hash: commit,
+          registry,
+        };
+        return json;
       }
 
-      const json = await config.readJson(`${url}/${filename}`, () => JSON.parse(file));
-      json._uid = commit;
-      json._remote = {
-        resolved: `${url}#${commit}`,
-        type: 'git',
-        reference: url,
-        hash: commit,
-        registry,
-      };
-      return json;
+      for (const filename of filenameList) {
+        const res = await tryFilename(filename);
+        if (res != null) {
+          return res;
+        }
+      }
+
+      return null;
     }
 
     const file = await tryRegistry(this.registry);

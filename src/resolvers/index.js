@@ -6,7 +6,6 @@ import RegistryNpm from './registries/npm-resolver.js';
 import RegistryYarn from './registries/yarn-resolver.js';
 
 export const registries = {
-  esy: RegistryNpm,
   npm: RegistryNpm,
   yarn: RegistryYarn,
 };

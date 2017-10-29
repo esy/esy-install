@@ -37,7 +37,7 @@ export default class BaseRegistry {
   }
 
   // the filename to use for package metadata
-  static filename: string;
+  static filenameList: Array<string>;
 
   //
   reporter: Reporter;

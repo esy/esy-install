@@ -258,11 +258,16 @@ export class Install {
     };
 
     for (const registry of Object.keys(registries)) {
-      const {filename} = registries[registry];
-      const loc = path.join(cwd, filename);
-      if (!await fs.exists(loc)) {
-        continue;
+      const {filenameList} = registries[registry];
+      let locToFind;
+      for (const filename of filenameList) {
+        locToFind = path.join(cwd, filename);
+        if (!await fs.exists(locToFind)) {
+          continue;
+        }
       }
+      invariant(locToFind != null, 'Cannot find manifest');
+      const loc = locToFind;
 
       this.rootManifestRegistries.push(registry);
 

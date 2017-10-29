@@ -44,7 +44,7 @@ export default class YarnRegistry extends NpmRegistry {
     this.homeConfig = {};
   }
 
-  static filename = 'yarn.json';
+  static filenameList = ['yarn.json'];
 
   homeConfigLoc: string;
   homeConfig: Object;

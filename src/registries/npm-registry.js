@@ -77,7 +77,7 @@ export default class NpmRegistry extends Registry {
     this.folder = 'node_modules';
   }
 
-  static filename = 'package.json';
+  static filenameList = ['esy.json', 'package.json'];
 
   static escapeName(name: string): string {
     // scoped packages contain slashes and the npm registry expects them to be escaped

@@ -412,9 +412,11 @@ export function main({
 
     // add manifests
     for (const registryName of registryNames) {
-      const possibleLoc = path.join(config.cwd, registries[registryName].filename);
-      const manifest = fs.existsSync(possibleLoc) ? fs.readFileSync(possibleLoc, 'utf8') : 'No manifest';
-      log.push(`${registryName} manifest: ${indent(manifest)}`);
+      for (const filename of registries[registryName].filenameList) {
+        const possibleLoc = path.join(config.cwd, filename);
+        const manifest = fs.existsSync(possibleLoc) ? fs.readFileSync(possibleLoc, 'utf8') : 'No manifest';
+        log.push(`${registryName} manifest (${filename}): ${indent(manifest)}`);
+      }
     }
 
     // lockfile

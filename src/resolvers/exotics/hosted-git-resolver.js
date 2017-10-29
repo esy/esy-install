@@ -146,26 +146,37 @@ export default class HostedGitResolver extends ExoticResolver {
     const tarballUrl = this.constructor.getTarballUrl(this.exploded, commit);
 
     const tryRegistry = async (registry): Promise<?Manifest> => {
-      const {filename} = registries[registry];
+      const {filenameList} = registries[registry];
 
-      const href = this.constructor.getHTTPFileUrl(this.exploded, filename, commit);
-      const file = await config.requestManager.request({
-        url: href,
-        queue: this.resolver.fetchingQueue,
-      });
-      if (!file) {
-        return null;
+      const tryFilename = async filename => {
+        const href = this.constructor.getHTTPFileUrl(this.exploded, filename, commit);
+        const file = await config.requestManager.request({
+          url: href,
+          queue: this.resolver.fetchingQueue,
+        });
+        if (!file) {
+          return null;
+        }
+
+        const json = await config.readJson(href, () => JSON.parse(file));
+        json._uid = commit;
+        json._remote = {
+          resolved: tarballUrl,
+          type: 'tarball',
+          reference: tarballUrl,
+          registry,
+        };
+        return json;
       }
 
-      const json = await config.readJson(href, () => JSON.parse(file));
-      json._uid = commit;
-      json._remote = {
-        resolved: tarballUrl,
-        type: 'tarball',
-        reference: tarballUrl,
-        registry,
-      };
-      return json;
+      for (const filename of filenameList) {
+        const res = await tryFilename(filename);
+        if (res != null) {
+          return res;
+        }
+      }
+
+      return null;
     };
 
     const file = await tryRegistry(this.registry);
