@@ -16,6 +16,8 @@ import {registries, registryNames} from './registries/index.js';
 import {NoopReporter} from './reporters/index.js';
 import map from './util/map.js';
 
+const stripBOM = require('strip-bom');
+const JSON5 = require('json5');
 const detectIndent = require('detect-indent');
 const invariant = require('invariant');
 const path = require('path');
@@ -585,7 +587,7 @@ export default class Config {
     const tryFilename = async (filename) => {
       const loc = path.join(dir, filename);
       if (await fs.exists(loc)) {
-        const data = await this.readJson(loc);
+        const data = await this.readJson(loc, readManifest);
         data._registry = registry;
         data._loc = loc;
         return normalizeManifest(data, dir, this, isRoot);
@@ -721,7 +723,7 @@ export default class Config {
         if (await fs.exists(jsonLoc)) {
           exists = true;
 
-          const info = await this.readJson(jsonLoc, fs.readJsonAndFile);
+          const info = await this.readJson(jsonLoc, readManifestAndContent);
           object = info.object;
           indent = detectIndent(info.content).indent || undefined;
           break;
@@ -775,5 +777,33 @@ export default class Config {
     const config = new Config(reporter);
     await config.init(opts);
     return config;
+  }
+}
+
+async function readManifest(loc: string) {
+  const {object} = await readManifestAndContent(loc);
+  return object;
+}
+
+async function readManifestAndContent(loc: string) {
+  const file = await fs.readFile(loc);
+  try {
+    return {
+      object: map(parseManifest(stripBOM(file), loc)),
+      content: file,
+    };
+  } catch (err) {
+    err.message = `${loc}: ${err.message}`;
+    throw err;
+  }
+}
+
+function parseManifest(content: string, loc: string): Object {
+  switch (path.basename(loc)) {
+    case 'esy.json':
+      return JSON5.parse(content);
+    case 'package.json':
+    default:
+      return JSON.parse(content);
   }
 }
