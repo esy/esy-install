@@ -51,10 +51,10 @@ export async function getManifestCollection(
 async function initImpl(config: Config) {
   const checkoutPath = path.join(config.cacheFolder, 'opam-repository');
   const onClone = () => {
-    config.reporter.info('Fetching OPAM repository...');
+    config.reporter.info(`Fetching OPAM repository: ${OPAM_REPOSITORY}...`);
   };
   const onUpdate = () => {
-    config.reporter.info('Updating OPAM repository...');
+    config.reporter.info(`Updating OPAM repository: ${OPAM_REPOSITORY}...`);
   };
   const [_, override, urlIndex] = await Promise.all([
     cloneOrUpdateRepository(OPAM_REPOSITORY, checkoutPath, {

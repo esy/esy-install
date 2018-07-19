@@ -4,7 +4,7 @@ export const OPAM_SCOPE = 'opam';
 
 export const OPAM_REPOSITORY = process.env.ESY_OPAM_REPOSITORY
   ? process.env.ESY_OPAM_REPOSITORY
-  : 'https://github.com/ocaml/opam-repository.git';
+  : process.platform === 'win32' ? 'https://github.com/fdopen/opam-repository-mingw.git' : 'https://github.com/ocaml/opam-repository.git';
 
 export const OPAM_REPOSITORY_OVERRIDE = process.env.ESY_OPAM_REPOSITORY_OVERRIDE
   ? process.env.ESY_OPAM_REPOSITORY_OVERRIDE
