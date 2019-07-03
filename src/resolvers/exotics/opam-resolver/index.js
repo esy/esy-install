@@ -211,10 +211,12 @@ function solveVersionConstraint<M: MinimalManifest>(
       invariant(v != null, `Invalid version: @${OPAM_SCOPE}/${name}@${version}`);
       // This is needed so `semver.satisfies()` will accept this for `*`
       // constraint.
-      (v: any)._prereleaseHidden = v.prerelease;
+      if (!semver.prerelease(versionRange)) {
+        (v: any)._prereleaseHidden = v.prerelease;
+        v.prerelease = [];
+      }
       // $FlowFixMe: ...
       v.opamVersion = manifestCollection.versions[version].opam.version;
-      v.prerelease = [];
       return v;
     });
 
